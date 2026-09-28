@@ -162,43 +162,86 @@ fn CRS_editorMaterial pattern label = (
 )
 fn CRS_seedKA1546 = (
     local d = CRS_Model()
-    local body = for n in geometry where classOf n.baseObject == Editable_mesh and (
-        matchPattern n.name pattern:"Group#1 *" or matchPattern n.name pattern:"Group#2 *" or
-        matchPattern n.name pattern:"Group#3 *" or matchPattern n.name pattern:"Group#4 *" or
-        matchPattern n.name pattern:"Group#9 *") collect n
-    local doors = for n in geometry where classOf n.baseObject == Editable_Poly and matchPattern n.name pattern:"Group#5 *" collect n
-    local plexi = for n in geometry where classOf n.baseObject == Editable_mesh and matchPattern n.name pattern:"Group#6 *" collect n
-    local legPaint = for n in geometry where classOf n.baseObject == Editable_mesh and matchPattern n.name pattern:"190 ELEGANZ AYAK*" collect n
-    local legMetal = for n in geometry where classOf n.baseObject == Editable_mesh and matchPattern n.name pattern:"Component#9 *" collect n
-    if doors.count != 4 do throw ("KA1546 eşlemesi için 4 kapak gerekli; " + doors.count as string + " kapak bulundu. Sahnede birden fazla ürün kopyası olabilir. Hangi ürün/kameranın kullanılacağını seçin; otomatik eşleme yanlış ürüne uygulanmadı.")
-    for n in doors do (
-        if not isKindOf n.material MultiMaterial do throw (n.name + ": Multi/Sub materyal bekleniyor.")
-        if findItem n.material.materialIDList 1 == 0 or findItem n.material.materialIDList 2 == 0 do throw (n.name + ": kapak yuzeyi ID 1 ve lazer ID 2 bulunmali.")
+    -- Check for TV Stand naming format (kapak*, dikme*, govde*, etc.) first
+    local tvDoors = for n in geometry where not isHidden n and (matchPattern (toLower n.name) pattern:"*kapak*" or matchPattern (toLower n.name) pattern:"group#5 *") collect n
+    local tvDikme = for n in geometry where not isHidden n and matchPattern (toLower n.name) pattern:"*dikme*" collect n
+    local tvBody = for n in geometry where not isHidden n and (
+        matchPattern (toLower n.name) pattern:"*govde*" or matchPattern (toLower n.name) pattern:"*gövde*" or
+        matchPattern (toLower n.name) pattern:"group#1 *" or matchPattern (toLower n.name) pattern:"group#2 *" or
+        matchPattern (toLower n.name) pattern:"group#3 *" or matchPattern (toLower n.name) pattern:"group#4 *" or
+        matchPattern (toLower n.name) pattern:"group#9 *") collect n
+    local tvPleksi = for n in geometry where not isHidden n and (
+        matchPattern (toLower n.name) pattern:"*pleksi*" or matchPattern (toLower n.name) pattern:"*plexi*" or
+        matchPattern (toLower n.name) pattern:"group#6 *") collect n
+    local tvLegs = for n in geometry where not isHidden n and (
+        matchPattern (toLower n.name) pattern:"*ayak*" or matchPattern (toLower n.name) pattern:"190 eleganz ayak*") collect n
+    local tvMetal = for n in geometry where not isHidden n and (
+        matchPattern (toLower n.name) pattern:"*kulp*" or matchPattern (toLower n.name) pattern:"component#9 *") collect n
+
+    local body = tvBody
+    local doors = tvDoors
+    local plexi = tvPleksi
+    local legPaint = tvLegs
+    local legMetal = tvMetal
+
+    local white = undefined
+    local laser = undefined
+
+    if doors.count > 0 do (
+        local door = doors[1]
+        if isKindOf door.material MultiMaterial then (
+            local id1 = findItem door.material.materialIDList 1
+            local id2 = findItem door.material.materialIDList 2
+            if id1 > 0 do white = copy door.material.materialList[id1]
+            if id2 > 0 do laser = copy door.material.materialList[id2]
+        ) else if door.material != undefined do (
+            white = copy door.material
+        )
     )
-    local door = doors[1]
-    local white = copy door.material.materialList[findItem door.material.materialIDList 1]
-    local laser = copy door.material.materialList[findItem door.material.materialIDList 2]
-    for n in doors do (
-        local laserMtl = n.material.materialList[findItem n.material.materialIDList 2]
-        if laserMtl == undefined or laserMtl.name != laser.name do throw "KA1546 kapaklarinin lazer materyalleri farkli. Elle esleme kullanin."
+
+    if white == undefined do (
+        try (white = CRS_editorMaterial "*beyaz*" "Beyaz") catch()
+        if white == undefined do try (white = CRS_editorMaterial "*white*" "White") catch()
+        if white == undefined and meditMaterials[1] != undefined do white = copy meditMaterials[1]
     )
-    d.bindings = #(
-        CRS_autoBinding "Gövde" body 9,
-        CRS_autoBinding "Kapak yüzeyi" doors 4 id:1,
-        CRS_autoBinding "Pleksi" plexi 4,
-        CRS_autoBinding "Ayak boya" legPaint 5,
-        CRS_autoBinding "Ayak metal detayı" legMetal 5,
-        CRS_autoBinding "Lazer yüzleri" doors 4 id:2
-    )
+
+    local bBody = CRS_Binding label:"Gövde"
+    for n in body do append bBody.nodes (CRS_makeRef n)
+    local bDoors = CRS_Binding label:"Kapak yüzeyi" faceID:(if (doors.count > 0 and isKindOf doors[1].material MultiMaterial) then 1 else 0)
+    for n in doors do append bDoors.nodes (CRS_makeRef n)
+    local bPlexi = CRS_Binding label:"Pleksi"
+    for n in plexi do append bPlexi.nodes (CRS_makeRef n)
+    local bLegs = CRS_Binding label:"Ayak boya"
+    for n in legPaint do append bLegs.nodes (CRS_makeRef n)
+    local bMetal = CRS_Binding label:"Ayak metal detayı"
+    for n in legMetal do append bMetal.nodes (CRS_makeRef n)
+    local bLaser = CRS_Binding label:"Lazer yüzleri" faceID:2
+    for n in doors do append bLaser.nodes (CRS_makeRef n)
+
+    d.bindings = #(bBody, bDoors, bPlexi, bLegs, bMetal, bLaser)
+
+    local pAnthracite = undefined
+    local pTravertine = undefined
+    local pOak = undefined
+    local pGold = undefined
+    local pSilver = undefined
+
+    try (pAnthracite = CRS_editorMaterial "*antrasit*" "Antrasit") catch()
+    try (pTravertine = CRS_editorMaterial "*traverten*" "Traverten") catch()
+    try (pOak = CRS_editorMaterial "*safir me?e*" "Safir meşe") catch()
+    try (pGold = CRS_editorMaterial "*gold pleksi*" "Gold Pleksi") catch()
+    try (pSilver = CRS_editorMaterial "*silver pleksi*" "Silver Pleksi") catch()
+
     d.palette = #(
         CRS_Swatch key:"WHITE" label:"Beyaz (sahnedeki)" mtl:white,
-        CRS_Swatch key:"ANTHRACITE" label:"Antrasit gri" mtl:(CRS_editorMaterial "*antrasit*" "Antrasit"),
-        CRS_Swatch key:"TRAVERTINE" label:"Traverten" mtl:(CRS_editorMaterial "*traverten*" "Traverten"),
-        CRS_Swatch key:"OAK" label:"Safir meşe" mtl:(CRS_editorMaterial "*safir me?e*" "Safir meşe"),
-        CRS_Swatch key:"GOLD" label:"Gold Pleksi" mtl:(CRS_editorMaterial "*gold pleksi*" "Gold Pleksi"),
-        CRS_Swatch key:"SILVER" label:"Silver Pleksi" mtl:(CRS_editorMaterial "*silver pleksi*" "Silver Pleksi"),
+        CRS_Swatch key:"ANTHRACITE" label:"Antrasit gri" mtl:pAnthracite,
+        CRS_Swatch key:"TRAVERTINE" label:"Traverten" mtl:pTravertine,
+        CRS_Swatch key:"OAK" label:"Safir meşe" mtl:pOak,
+        CRS_Swatch key:"GOLD" label:"Gold Pleksi" mtl:pGold,
+        CRS_Swatch key:"SILVER" label:"Silver Pleksi" mtl:pSilver,
         CRS_Swatch key:"LASER" label:"Siyah lazer çizgisi" mtl:laser
     )
+
     local combos = #(#("B","Beyaz","WHITE","WHITE"), #("A","Antrasit","ANTHRACITE","ANTHRACITE"), #("BT","Beyaz / traverten","WHITE","TRAVERTINE"), #("AT","Antrasit / traverten","ANTHRACITE","TRAVERTINE"), #("DB","Doğal / beyaz","OAK","WHITE"))
     for finish in #("GOLD","SILVER") do for row in combos do (
         local suffix = if finish == "GOLD" then "G" else "S"
