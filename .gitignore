@@ -1,0 +1,25 @@
+# Local guidance and launchers can contain machine-specific paths
+/AGENTS.md
+/CRS_WindowBridge.dll
+/Ceneyra Render Studio - Aktif Sahne.bat
+/Ceneyra Render Studio KA1546.bat
+/KA1546 4-5-6 - Ceneyra Studio.bat
+
+# 3ds Max scenes and generated work
+*.max
+/work/
+/renders/
+/render-tests/
+/launch-tests/
+/previews/
+/cache/
+/tests/
+
+# Local test reports, captures, and other generated media
+*-results.txt
+*.png
+*.jpg
+*.jpeg
+*.exr
+*.tmp
+*.bak
